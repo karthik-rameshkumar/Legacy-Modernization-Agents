@@ -184,7 +184,7 @@ cd Legacy-Modernization-Agents
 
 # 2. Interactive setup — select "GitHub Copilot SDK" when prompted
 ./doctor.sh setup
-# Verifies Copilot CLI, authenticates, lets you pick a model, writes config
+# Verifies Copilot CLI, authenticates, lets you pick chat & code models, writes config
 
 # 3. Start Neo4j (dependency graph storage)
 docker-compose up -d neo4j
@@ -194,7 +194,18 @@ dotnet build
 ./doctor.sh run
 ```
 
-The setup wizard checks that the Copilot CLI is installed, runs `copilot login`, fetches available models for your account, and writes `Config/ai-config.local.env` with `AZURE_OPENAI_SERVICE_TYPE="GitHubCopilot"`.
+The setup wizard walks you through the following steps:
+
+1. **Provider selection** — choose "GitHub Copilot SDK"
+2. **Authentication** — pick one of two methods:
+   | Method | How it works |
+   |--------|-------------|
+   | **GitHub CLI** (default) | Runs `copilot login` interactively — no token to manage |
+   | **Personal Access Token (PAT)** | Provide a classic PAT with the `copilot` scope. Create one at [github.com/settings/tokens](https://github.com/settings/tokens). Fine-grained PATs do **not** support Copilot. |
+3. **Chat model** — select the model used for analysis, reasoning, and reverse engineering
+4. **Code model** — optionally pick a different model optimized for code generation, or reuse the chat model
+
+The wizard writes `Config/ai-config.local.env` with `AZURE_OPENAI_SERVICE_TYPE="GitHubCopilot"` and your chosen models.
 
 ---
 
