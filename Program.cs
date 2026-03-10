@@ -375,22 +375,30 @@ internal static class Program
             // Get API version from environment or default
             var apiVersion = Environment.GetEnvironmentVariable("AZURE_OPENAI_API_VERSION") ?? "2025-04-01-preview";
 
+            // Validate AI settings before using them
+            var aiSettings = settings.AISettings;
+            if (aiSettings is null)
+            {
+                Console.Error.WriteLine("AI settings are not configured. Cannot initialize ResponsesApiClient.");
+                return;
+            }
+
             // Create ResponsesApiClient for code agents - Use same logic as RunMigrationAsync
             ResponsesApiClient? responsesApiClient = null;
-            if (!IsGitHubCopilotMode(settings.AISettings) &&
-                !string.IsNullOrEmpty(settings.AISettings.Endpoint) && !string.IsNullOrEmpty(settings.AISettings.DeploymentName))
+            if (!IsGitHubCopilotMode(aiSettings) &&
+                !string.IsNullOrEmpty(aiSettings.Endpoint) && !string.IsNullOrEmpty(aiSettings.DeploymentName))
             {
                 // Force Entra ID (DefaultAzureCredential) by passing empty API Key as requested
                 responsesApiClient = new ResponsesApiClient(
-                    settings.AISettings.Endpoint,
+                    aiSettings.Endpoint,
                     string.Empty, // Forces DefaultAzureCredential
-                    settings.AISettings.DeploymentName,
+                    aiSettings.DeploymentName,
                     loggerFactory.CreateLogger<ResponsesApiClient>(),
                     enhancedLogger,
                     profile: settings.CodexProfile,
                     apiVersion: apiVersion,
                     rateLimitSafetyFactor: settings.ChunkingSettings.RateLimitSafetyFactor);
-                mcpLogger.LogInformation("ResponsesApiClient initialized for codex model: {DeploymentName} (Entra ID)", settings.AISettings.DeploymentName);
+                mcpLogger.LogInformation("ResponsesApiClient initialized for codex model: {DeploymentName} (Entra ID)", aiSettings.DeploymentName);
             }
 
             // Create IChatClient for MCP server
