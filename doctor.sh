@@ -1068,18 +1068,6 @@ SQL
     
     echo -e "${GREEN}✅ Report generated successfully!${NC}"
     echo -e "${CYAN}📄 Location: $report_file${NC}"
-    
-    # Ask if user wants to view the report
-    echo ""
-    read -p "View the report now? (Y/n): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
-        if command -v less >/dev/null 2>&1; then
-            less "$report_file"
-        else
-            cat "$report_file"
-        fi
-    fi
 }
 
 # Function for interactive setup
@@ -1093,7 +1081,7 @@ run_setup() {
     if [ -f "$LOCAL_CONFIG" ]; then
         echo -e "${YELLOW}⚠️  Local configuration already exists:${NC} $LOCAL_CONFIG"
         echo ""
-        read -p "Do you want to overwrite it? (y/N): " -n 1 -r
+        read -p "Do you want to overwrite it? (y/N): " -r
         echo ""
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo -e "${BLUE}ℹ️  Setup cancelled. Your existing configuration is preserved.${NC}"
@@ -1160,16 +1148,51 @@ run_setup() {
         fi
         echo ""
 
-        # Authenticate
-        echo -e "${BLUE}🔐 Authenticating with GitHub Copilot...${NC}"
+        # Authentication method selection
+        echo -e "${BLUE}🔐 How do you want to authenticate?${NC}"
+        echo -e "  ${GREEN}1)${NC} GitHub CLI (copilot login) (default)"
+        echo -e "  ${GREEN}2)${NC} Personal Access Token (PAT)"
         echo ""
-        if ! copilot login; then
+        read -p "Choice [1]: " auth_choice
+        auth_choice=${auth_choice:-1}
+        echo ""
+
+        local ghcp_token=""
+
+        if [[ "$auth_choice" == "2" ]]; then
+            # --- PAT authentication ---
+            echo -e "${BLUE}🔑 Personal Access Token Authentication${NC}"
             echo ""
-            echo -e "${RED}❌ Authentication failed. Please try again.${NC}"
-            return 1
+            echo -e "${YELLOW}Your PAT needs the following permission:${NC}"
+            echo ""
+            echo -e "  ${BLUE}Classic PAT (fine-grained PATs do not currently support Copilot):${NC}"
+            echo "    • copilot"
+            echo ""
+            echo -e "${YELLOW}Create one at: https://github.com/settings/tokens${NC}"
+            echo ""
+            # Read from /dev/tty explicitly to ensure correct capture in all terminal environments
+            echo -n "Please provide the PAT and press Enter: "
+            read -s ghcp_token < /dev/tty
+            echo ""
+
+            if [[ -z "$ghcp_token" ]]; then
+                echo -e "${RED}❌ No PAT provided. Aborting.${NC}"
+                return 1
+            fi
+
+            echo -e "${GREEN}✅ PAT received: ${ghcp_token:0:4}...${ghcp_token: -4}${NC}"
+        else
+            # --- CLI authentication (existing flow) ---
+            echo -e "${BLUE}🔐 Authenticating with GitHub Copilot...${NC}"
+            echo ""
+            if ! copilot login; then
+                echo ""
+                echo -e "${RED}❌ Authentication failed. Please try again.${NC}"
+                return 1
+            fi
+            echo ""
+            echo -e "${GREEN}✅ Authentication successful!${NC}"
         fi
-        echo ""
-        echo -e "${GREEN}✅ Authentication successful!${NC}"
         echo ""
 
         # Get available models from GitHub Copilot (user-specific)
@@ -1189,6 +1212,13 @@ run_setup() {
             [[ -n "$model" ]] && models+=("$model")
         done <<< "$models_raw"
 
+        # --- Step 1: Chat Model Selection ---
+        echo -e "${BOLD}${BLUE}Step 1: Chat Model${NC}"
+        echo -e "${CYAN}The chat model handles analysis, reasoning, and conversation tasks —${NC}"
+        echo -e "${CYAN}reverse engineering COBOL logic, extracting business rules, and planning${NC}"
+        echo -e "${CYAN}the migration strategy. A strong reasoning model works best here.${NC}"
+        echo ""
+
         if [[ ${#models[@]} -gt 0 ]]; then
             local i=1
             for m in "${models[@]}"; do
@@ -1198,23 +1228,62 @@ run_setup() {
             echo ""
             echo -e "${YELLOW}Note: Model availability depends on your GitHub Copilot plan.${NC}"
             echo ""
-            read -p "Select model number [1-${#models[@]}] (default: 1): " model_choice
-            model_choice=${model_choice:-1}
+            read -p "Select chat model [1-${#models[@]}] (default: 1): " chat_choice
+            chat_choice=${chat_choice:-1}
 
-            if [[ "$model_choice" =~ ^[0-9]+$ ]] && (( model_choice >= 1 && model_choice <= ${#models[@]} )); then
-                ghcp_model="${models[$((model_choice - 1))]}"
+            if [[ "$chat_choice" =~ ^[0-9]+$ ]] && (( chat_choice >= 1 && chat_choice <= ${#models[@]} )); then
+                ghcp_chat_model="${models[$((chat_choice - 1))]}"
             else
                 echo -e "${RED}Invalid selection, using default: ${models[0]}${NC}"
-                ghcp_model="${models[0]}"
+                ghcp_chat_model="${models[0]}"
             fi
         else
-            # Fallback if all parsing fails
-            read -p "Model name (default: claude-sonnet-4): " ghcp_model
-            ghcp_model=${ghcp_model:-claude-sonnet-4}
+            read -p "Chat model name (default: claude-sonnet-4): " ghcp_chat_model
+            ghcp_chat_model=${ghcp_chat_model:-claude-sonnet-4}
         fi
 
         echo ""
-        echo -e "${GREEN}Selected model: $ghcp_model${NC}"
+        echo -e "${GREEN}✅ Chat model: $ghcp_chat_model${NC}"
+        echo ""
+
+        # --- Step 2: Code Model Selection ---
+        echo -e "${BOLD}${BLUE}Step 2: Code Model${NC}"
+        echo -e "${CYAN}The code model generates the actual Java/C# source code from COBOL.${NC}"
+        echo -e "${CYAN}It writes classes, methods, and tests. A model optimized for code${NC}"
+        echo -e "${CYAN}generation can improve output quality and compilation success rates.${NC}"
+        echo ""
+        read -p "Use a different model for code generation? (y/N): " -r
+        echo ""
+
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo ""
+            if [[ ${#models[@]} -gt 0 ]]; then
+                local j=1
+                for m in "${models[@]}"; do
+                    echo "  $j) $m"
+                    ((j++))
+                done
+                echo ""
+                read -p "Select code model [1-${#models[@]}] (default: 1): " code_choice
+                code_choice=${code_choice:-1}
+
+                if [[ "$code_choice" =~ ^[0-9]+$ ]] && (( code_choice >= 1 && code_choice <= ${#models[@]} )); then
+                    ghcp_code_model="${models[$((code_choice - 1))]}"
+                else
+                    echo -e "${RED}Invalid selection, using default: ${models[0]}${NC}"
+                    ghcp_code_model="${models[0]}"
+                fi
+            else
+                read -p "Code model name (default: claude-sonnet-4): " ghcp_code_model
+                ghcp_code_model=${ghcp_code_model:-claude-sonnet-4}
+            fi
+        else
+            ghcp_code_model="$ghcp_chat_model"
+        fi
+
+        echo ""
+        echo -e "${GREEN}✅ Chat model: $ghcp_chat_model${NC}"
+        echo -e "${GREEN}✅ Code model: $ghcp_code_model${NC}"
 
         # Write local config for GitHub Copilot
         cat > "$LOCAL_CONFIG" <<EOF
@@ -1222,15 +1291,16 @@ run_setup() {
 # GitHub Copilot SDK Configuration
 # =============================================================================
 # This configuration uses the GitHub Copilot SDK instead of Azure OpenAI.
-# Requires: Copilot CLI installed and authenticated (copilot login).
+# Requires: Copilot CLI installed.
+# Auth: either 'copilot login' or a Personal Access Token (PAT).
 # =============================================================================
 
 # Provider
 AZURE_OPENAI_SERVICE_TYPE="GitHubCopilot"
 
 # Model Selection
-_CHAT_MODEL="$ghcp_model"
-_CODE_MODEL="$ghcp_model"
+_CHAT_MODEL="$ghcp_chat_model"
+_CODE_MODEL="$ghcp_code_model"
 
 # System mapping (model IDs for the application)
 AZURE_OPENAI_MODEL_ID="\$_CODE_MODEL"
@@ -1246,8 +1316,19 @@ AISETTINGS__ENDPOINT="https://copilot-sdk-placeholder"
 AISETTINGS__CHATENDPOINT="https://copilot-sdk-placeholder"
 EOF
 
+        # Append PAT to config if provided
+        if [[ -n "$ghcp_token" ]]; then
+            cat >> "$LOCAL_CONFIG" <<EOF
+
+# GitHub Copilot PAT Authentication
+# Classic PAT with 'copilot' scope (fine-grained PATs do not currently support Copilot)
+GITHUB_COPILOT_TOKEN="$ghcp_token"
+EOF
+        fi
+
         echo ""
         echo -e "${GREEN}✅ GitHub Copilot SDK configuration written!${NC}"
+        echo -e "   Config file: ${BLUE}$LOCAL_CONFIG${NC}"
         echo ""
         echo -e "${BLUE}Next steps:${NC}"
         echo "1. Run: ./doctor.sh test"
@@ -1784,7 +1865,7 @@ run_migration() {
     echo ""
     echo -e "${BLUE}📄 Generate Migration Report?${NC}"
     echo "========================================"
-    read -p "Generate a detailed migration report for this run? (Y/n): " -n 1 -r
+    read -p "Generate a detailed migration report for this run? (Y/n): " -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
         generate_migration_report
@@ -2135,7 +2216,7 @@ run_conversion_only() {
     echo "  the database and can be injected into conversion prompts for"
     echo "  higher-quality output."
     echo ""
-    read -p "Reuse business logic from last RE run? (y/N): " -n 1 -r
+    read -p "Reuse business logic from last RE run? (y/N): " -r
     echo ""
     local reuse_re_flag=""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
