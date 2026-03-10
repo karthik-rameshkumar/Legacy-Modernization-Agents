@@ -48,7 +48,6 @@ public sealed class CopilotChatClient : IChatClient, IAsyncDisposable
     /// </summary>
     private async Task EnsureStartedAsync()
     {
-        if (_started) return;
         await _startLock.WaitAsync();
         try
         {
@@ -239,14 +238,12 @@ public sealed class CopilotChatClient : IChatClient, IAsyncDisposable
 
     /// <inheritdoc />
     /// <remarks>
-    /// Blocks the calling thread. Prefer <c>await using</c> to call <see cref="DisposeAsync"/> instead.
-    /// May deadlock in synchronization-context-bound environments (e.g. ASP.NET Core).
+    /// Synchronous disposal is not supported. Use <c>await using</c> to call <see cref="DisposeAsync"/> instead.
     /// </remarks>
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
-        _client.ForceStopAsync().GetAwaiter().GetResult();
+        throw new NotSupportedException(
+            "CopilotChatClient requires async disposal. Use 'await using' or call DisposeAsync() directly.");
     }
 
     /// <inheritdoc />
