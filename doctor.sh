@@ -1279,6 +1279,7 @@ run_setup() {
             fi
         else
             ghcp_code_model="$ghcp_chat_model"
+            echo -e "${CYAN}⏭️  Skipped — using chat model ${BOLD}$ghcp_chat_model${NC}${CYAN} for code generation too${NC}"
         fi
 
         echo ""
