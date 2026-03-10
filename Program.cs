@@ -158,6 +158,7 @@ internal static class Program
         listModelsCommand.SetHandler(async () =>
         {
             await using var client = new CopilotClient();
+            await client.StartAsync();
             var models = await client.ListModelsAsync();
             foreach (var model in models)
             {
@@ -403,16 +404,16 @@ internal static class Program
 
             // Create IChatClient for MCP server
             IChatClient? chatClient = null;
-            var chatDeployment = settings.AISettings?.ChatDeploymentName ?? settings.AISettings?.ChatModelId ?? settings.AISettings?.DeploymentName;
+            var chatDeployment = aiSettings.ChatDeploymentName ?? aiSettings.ChatModelId ?? aiSettings.DeploymentName;
 
-            if (IsGitHubCopilotMode(settings.AISettings!))
+            if (IsGitHubCopilotMode(aiSettings))
             {
-                chatClient = CreateChatClientFromSettings(settings.AISettings!, mcpLogger, forChat: true);
+                chatClient = CreateChatClientFromSettings(aiSettings, mcpLogger, forChat: true);
             }
-            else if (!string.IsNullOrEmpty(settings.AISettings?.ChatEndpoint ?? settings.AISettings?.Endpoint) && !string.IsNullOrEmpty(chatDeployment))
+            else if (!string.IsNullOrEmpty(aiSettings.ChatEndpoint ?? aiSettings.Endpoint) && !string.IsNullOrEmpty(chatDeployment))
             {
-                var chatEndpoint = settings.AISettings?.ChatEndpoint ?? settings.AISettings?.Endpoint;
-                var chatApiKey = settings.AISettings?.ChatApiKey ?? settings.AISettings?.ApiKey;
+                var chatEndpoint = aiSettings.ChatEndpoint ?? aiSettings.Endpoint;
+                var chatApiKey = aiSettings.ChatApiKey ?? aiSettings.ApiKey;
                 bool useEntraId = string.IsNullOrEmpty(chatApiKey) || chatApiKey.Contains("your-api-key");
                 if (useEntraId)
                 {

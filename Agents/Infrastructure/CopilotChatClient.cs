@@ -18,6 +18,7 @@ public sealed class CopilotChatClient : IChatClient, IAsyncDisposable
     private readonly CopilotClient _client;
     private readonly string _model;
     private readonly ILogger? _logger;
+    private readonly SemaphoreSlim _startLock = new(1, 1);
     private bool _started;
     private bool _disposed;
 
@@ -48,8 +49,17 @@ public sealed class CopilotChatClient : IChatClient, IAsyncDisposable
     private async Task EnsureStartedAsync()
     {
         if (_started) return;
-        await _client.StartAsync();
-        _started = true;
+        await _startLock.WaitAsync();
+        try
+        {
+            if (_started) return;
+            await _client.StartAsync();
+            _started = true;
+        }
+        finally
+        {
+            _startLock.Release();
+        }
     }
 
     /// <inheritdoc />
@@ -176,7 +186,8 @@ public sealed class CopilotChatClient : IChatClient, IAsyncDisposable
         {
             Model = model,
             Streaming = true,
-            InfiniteSessions = new InfiniteSessionConfig { Enabled = false }
+            InfiniteSessions = new InfiniteSessionConfig { Enabled = false },
+            OnPermissionRequest = PermissionHandler.ApproveAll
         };
 
         if (systemMessage != null)
@@ -227,6 +238,10 @@ public sealed class CopilotChatClient : IChatClient, IAsyncDisposable
     public object? GetService(Type serviceType, object? serviceKey = null) => null;
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Blocks the calling thread. Prefer <c>await using</c> to call <see cref="DisposeAsync"/> instead.
+    /// May deadlock in synchronization-context-bound environments (e.g. ASP.NET Core).
+    /// </remarks>
     public void Dispose()
     {
         if (_disposed) return;
@@ -243,9 +258,14 @@ public sealed class CopilotChatClient : IChatClient, IAsyncDisposable
         {
             await _client.StopAsync();
         }
-        catch (Exception ex)
+        catch (OperationCanceledException ex)
         {
-            _logger?.LogWarning(ex, "CopilotChatClient: graceful stop failed, force-stopping");
+            _logger?.LogWarning(ex, "CopilotChatClient: graceful stop was canceled, force-stopping");
+            await _client.ForceStopAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger?.LogWarning(ex, "CopilotChatClient: graceful stop failed due to invalid state, force-stopping");
             await _client.ForceStopAsync();
         }
     }
