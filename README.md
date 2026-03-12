@@ -1034,6 +1034,11 @@ _CHAT_MODEL="claude-sonnet-4"    # Any model available to your Copilot plan
 _CODE_MODEL="claude-sonnet-4"
 ```
 
+To list models available to your Copilot account:
+```bash
+dotnet run -- list-models
+```
+
 Requirements:
 - **Copilot CLI** installed and in `PATH` (`npm install -g @github/copilot@latest`)
 - Authenticated via `copilot login`

@@ -5,7 +5,7 @@ All notable changes to this repository are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.6.0] - 2026-03-09
+## [2.6.0] - 2026-03-10
 
 ### Added
 - **GitHub Copilot SDK Provider** — New `ServiceType=GitHubCopilot` option uses the `GitHub.Copilot.SDK` NuGet package and `CopilotChatClient` as an alternative to Azure OpenAI. All agents fall back to `IChatClient` when `ResponsesApiClient` is unavailable. Configuration requires only `AISETTINGS__MODELID`; endpoint and API key are ignored.
